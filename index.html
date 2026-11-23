@@ -2,41 +2,103 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>DA Booking Panel</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f5f7fa;
-            padding: 20px;
-            color: #243247;
-        }
-        .card {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            margin-top: 15px;
-            border: 1px solid #ddd;
-        }
-        h2 {
-            color: #183b63;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DA Booking Information</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f7fa;
+      color: #243247;
+      margin: 0;
+      padding: 16px;
+    }
+    h2 { color: #183b63; font-size: 20px; }
+    .card {
+      background: white;
+      padding: 18px;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      margin-top: 14px;
+    }
+    .label {
+      color: #66758a;
+      font-size: 12px;
+      font-weight: bold;
+    }
+    .reference {
+      font-size: 24px;
+      font-weight: bold;
+      margin-top: 8px;
+      overflow-wrap: anywhere;
+    }
+    .status {
+      font-size: 13px;
+      margin-top: 12px;
+      color: #66758a;
+    }
+    .success { color: #18834b; }
+  </style>
 </head>
 <body>
 
-    <h2>DA Booking Information</h2>
+  <h2>DA Booking Information</h2>
 
-    <div class="card">
-        <h3>Website Status</h3>
-        <p>Booking Panel is working!</p>
+  <div class="card">
+    <div class="label">MYL BOOKING REFERENCE</div>
+    <div class="reference" id="bookingRef">Waiting...</div>
+    <div class="status" id="status">
+      Waiting for Chatlyn connection...
     </div>
+  </div>
 
-    <div class="card">
-        <h3>Guest Information</h3>
-        <p>Waiting for Chatlyn connection...</p>
-    </div>
+  <div class="card">
+    <div class="label">BOOKING SERVICES</div>
+    <p>Arrival, departure, tours and transfers will appear here
+    once Microsoft Lists is securely connected.</p>
+  </div>
+
+  <script>
+    const CHATLYN_ORIGIN = "https://web.chatlyn.com";
+
+    const bookingRef = document.getElementById("bookingRef");
+    const status = document.getElementById("status");
+
+    window.addEventListener("message", function(event) {
+      if (event.origin !== CHATLYN_ORIGIN) return;
+      if (event.source !== window.parent) return;
+
+      const message = event.data;
+
+      if (!message || message.source !== "chatlyn") return;
+      if (message.event !== "context" || message.version !== 1) return;
+
+      const contact = message.data?.contact;
+      const attributes = contact?.customAttributes || {};
+
+      const myl = attributes.myl_booking_ref;
+
+      if (typeof myl === "string" && myl.trim()) {
+        bookingRef.textContent = myl.trim();
+        status.textContent = "Booking reference received from Chatlyn";
+        status.className = "status success";
+      } else {
+        bookingRef.textContent = "Not assigned";
+        status.textContent = "No MYL booking reference found for this contact.";
+        status.className = "status";
+      }
+    });
+
+    if (window.parent !== window) {
+      window.parent.postMessage({
+        source: "chatlyn-app",
+        event: "ready"
+      }, CHATLYN_ORIGIN);
+    } else {
+      bookingRef.textContent = "Open in Chatlyn";
+      status.textContent = "Waiting for an embedded Chatlyn conversation.";
+    }
+  </script>
 
 </body>
 </html>
