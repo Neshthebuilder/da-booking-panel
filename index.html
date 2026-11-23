@@ -16,10 +16,10 @@
     h2 { color: #183b63; font-size: 20px; }
     .card {
       background: white;
-      padding: 18px;
+      padding: 16px;
       border: 1px solid #ddd;
       border-radius: 10px;
-      margin-top: 14px;
+      margin-top: 12px;
     }
     .label {
       color: #66758a;
@@ -27,17 +27,43 @@
       font-weight: bold;
     }
     .reference {
-      font-size: 24px;
+      font-size: 22px;
       font-weight: bold;
-      margin-top: 8px;
+      margin: 8px 0;
       overflow-wrap: anywhere;
     }
     .status {
       font-size: 13px;
-      margin-top: 12px;
+      margin-top: 10px;
       color: #66758a;
     }
     .success { color: #18834b; }
+    .error { color: #b42318; }
+    .service-title {
+      font-weight: bold;
+      color: #183b63;
+      margin-bottom: 10px;
+    }
+    .detail {
+      font-size: 13px;
+      margin: 6px 0;
+      overflow-wrap: anywhere;
+    }
+    .detail strong { color: #66758a; }
+    input {
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      width: 58%;
+    }
+    button {
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      background: #183b63;
+      color: white;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -48,22 +74,170 @@
     <div class="label">MYL BOOKING REFERENCE</div>
     <div class="reference" id="bookingRef">Waiting...</div>
     <div class="status" id="status">
-      Waiting for Chatlyn connection...
+      Waiting for booking reference...
     </div>
   </div>
 
   <div class="card">
-    <div class="label">BOOKING SERVICES</div>
-    <p>Arrival, departure, tours and transfers will appear here
-    once Microsoft Lists is securely connected.</p>
+    <div class="label">TEST BOOKING LOOKUP</div>
+    <p>
+      <input id="manualRef"
+        value="MYL900001"
+        placeholder="Enter MYL reference">
+      <button id="searchButton">Search</button>
+    </p>
+  </div>
+
+  <div id="services">
+    <div class="card">
+      <div class="label">BOOKING SERVICES</div>
+      <p>No booking loaded yet.</p>
+    </div>
   </div>
 
   <script>
     const CHATLYN_ORIGIN = "https://web.chatlyn.com";
 
-    const bookingRef = document.getElementById("bookingRef");
-    const status = document.getElementById("status");
+    // Fictional-data prototype endpoint only
+    const API_URL =
+      "https://script.google.com/macros/s/" +
+      "AKfycbzF_Vt9yOg0EtJZgNxAy24p_MxuyOTgv7pfpco4nMfDzd8VzezgrkxO4FcC_WVrGykd0Q/exec";
 
+    const bookingRefEl = document.getElementById("bookingRef");
+    const statusEl = document.getElementById("status");
+    const servicesEl = document.getElementById("services");
+    const manualRefEl = document.getElementById("manualRef");
+
+    let requestNumber = 0;
+
+    function setStatus(message, type = "") {
+      statusEl.textContent = message;
+      statusEl.className = "status " + type;
+    }
+
+    function addDetail(card, label, value) {
+      if (!value) return;
+
+      const div = document.createElement("div");
+      div.className = "detail";
+
+      const strong = document.createElement("strong");
+      strong.textContent = label + ": ";
+
+      div.appendChild(strong);
+      div.appendChild(document.createTextNode(value));
+      card.appendChild(div);
+    }
+
+    function showServices(data) {
+      servicesEl.replaceChildren();
+
+      if (!data.success || !data.services.length) {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.textContent = "No matching booking services found.";
+        servicesEl.appendChild(card);
+        setStatus("No matching services found.");
+        return;
+      }
+
+      setStatus(
+        data.count + " booking service(s) found.",
+        "success"
+      );
+
+      data.services.forEach(service => {
+        const card = document.createElement("div");
+        card.className = "card";
+
+        const title = document.createElement("div");
+        title.className = "service-title";
+        title.textContent =
+          (service.serviceCategory || "Service") +
+          " — " + (service.serviceName || "");
+
+        card.appendChild(title);
+
+        addDetail(card, "Date", service.serviceDate);
+        addDetail(card, "Pickup", service.pickupTime);
+        addDetail(card, "From", service.pickupLocation);
+        addDetail(card, "To", service.dropoffLocation);
+        addDetail(card, "Flight", service.flightNumber);
+        addDetail(card, "Flight Time", service.flightTime);
+        addDetail(card, "Type", service.serviceType);
+        addDetail(card, "Adults", service.adults);
+        addDetail(card, "Status", service.reviewStatus);
+
+        servicesEl.appendChild(card);
+      });
+    }
+
+    function lookupBooking(ref) {
+      const reference = String(ref || "").trim().toUpperCase();
+
+      if (!reference) {
+        setStatus("Enter a booking reference.", "error");
+        return;
+      }
+
+      bookingRefEl.textContent = reference;
+      setStatus("Loading booking services...");
+      servicesEl.replaceChildren();
+
+      const currentRequest = ++requestNumber;
+      const callbackName = "bookingCallback_" + currentRequest;
+
+      const script = document.createElement("script");
+
+      const timeout = setTimeout(() => {
+        cleanup();
+        if (currentRequest === requestNumber) {
+          setStatus("Booking lookup timed out.", "error");
+        }
+      }, 15000);
+
+      function cleanup() {
+        clearTimeout(timeout);
+        script.remove();
+        delete window[callbackName];
+      }
+
+      window[callbackName] = function(data) {
+        cleanup();
+
+        if (currentRequest !== requestNumber) return;
+
+        showServices(data);
+      };
+
+      script.onerror = function() {
+        cleanup();
+
+        if (currentRequest === requestNumber) {
+          setStatus("Unable to load booking data.", "error");
+        }
+      };
+
+      script.src =
+        API_URL +
+        "?bookingRef=" + encodeURIComponent(reference) +
+        "&callback=" + encodeURIComponent(callbackName);
+
+      document.body.appendChild(script);
+    }
+
+    document.getElementById("searchButton")
+      .addEventListener("click", () => {
+        lookupBooking(manualRefEl.value);
+      });
+
+    manualRefEl.addEventListener("keydown", event => {
+      if (event.key === "Enter") {
+        lookupBooking(manualRefEl.value);
+      }
+    });
+
+    // Receive booking reference from Chatlyn
     window.addEventListener("message", function(event) {
       if (event.origin !== CHATLYN_ORIGIN) return;
       if (event.source !== window.parent) return;
@@ -73,19 +247,21 @@
       if (!message || message.source !== "chatlyn") return;
       if (message.event !== "context" || message.version !== 1) return;
 
-      const contact = message.data?.contact;
-      const attributes = contact?.customAttributes || {};
+      const attributes =
+        message.data?.contact?.customAttributes || {};
 
-      const myl = attributes.myl_booking_ref;
+      const myl =
+        attributes.myl_booking_ref ||
+        attributes.booking_ref;
 
       if (typeof myl === "string" && myl.trim()) {
-        bookingRef.textContent = myl.trim();
-        status.textContent = "Booking reference received from Chatlyn";
-        status.className = "status success";
+        manualRefEl.value = myl.trim();
+        lookupBooking(myl);
       } else {
-        bookingRef.textContent = "Not assigned";
-        status.textContent = "No MYL booking reference found for this contact.";
-        status.className = "status";
+        ++requestNumber;
+        bookingRefEl.textContent = "Not assigned";
+        servicesEl.replaceChildren();
+        setStatus("No MYL reference found for this contact.");
       }
     });
 
@@ -95,10 +271,9 @@
         event: "ready"
       }, CHATLYN_ORIGIN);
     } else {
-      bookingRef.textContent = "Open in Chatlyn";
-      status.textContent = "Waiting for an embedded Chatlyn conversation.";
+      bookingRefEl.textContent = "Manual test mode";
+      setStatus("Enter an MYL reference to test.");
     }
   </script>
-
 </body>
 </html>
